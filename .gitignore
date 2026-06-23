@@ -1,0 +1,5 @@
+*.pt
+*.task
+*.mp4
+*.npz
+__pycache__/
