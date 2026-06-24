@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coach Portal - Cali AI Coach</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+          <path d="M18 12H6v2a6 6 0 0 0 12 0v-2z"/>
+        </svg>
+        <span>Cali AI</span>
+      </div>
+      <nav class="nav">
+        <a href="/" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Skills
+        </a>
+        <a href="/workout" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Workout
+        </a>
+        <a href="/admin" class="nav-item active">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Coach
+        </a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h1>Coach Portal</h1>
+        <p class="subtitle">Tạo bài tập mẫu mới từ video</p>
+      </header>
+
+      <section class="admin-section">
+        <div class="card admin-card">
+          <h2>Thông tin bài tập</h2>
+
+          <div class="form-group">
+            <label for="exercise-name">Tên kỹ năng</label>
+            <input type="text" id="exercise-name" placeholder="VD: Archers Push-up, Hít đất kiểu cung thủ" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label>Video mẫu (.mp4)</label>
+            <div class="dropzone" id="admin-dropzone">
+              <div class="dz-content">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p>Kéo thả video mẫu vào đây hoặc <span class="link">chọn file</span></p>
+                <p class="hint">Quay động tác chuẩn, đủ ánh sáng, toàn thân trong khung hình</p>
+              </div>
+              <input type="file" id="admin-file" accept="video/mp4" hidden>
+            </div>
+          </div>
+
+          <button class="btn" id="process-btn" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            TRÍCH XUẤT KEYFRAMES & CHUẨN HÓA VECTOR
+          </button>
+        </div>
+
+        <div class="card" id="result-card" hidden>
+          <h2>Kết quả</h2>
+          <div class="result-content" id="result-content"></div>
+        </div>
+
+        <div class="card pipeline-card">
+          <h2>Pipeline xử lý</h2>
+          <div class="pipeline-flow">
+            <div class="pipe-step">Tải video</div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step">MediaPipe Pose</div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step">H36M 17 joints</div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step">K-Means 30 keyframes</div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step">Normalize vector</div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step">.pkl</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('admin-dropzone');
+    const fileInput = document.getElementById('admin-file');
+    const nameInput = document.getElementById('exercise-name');
+    const processBtn = document.getElementById('process-btn');
+    const resultCard = document.getElementById('result-card');
+    const resultContent = document.getElementById('result-content');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        checkReady();
+      }
+    });
+    fileInput.addEventListener('change', checkReady);
+    nameInput.addEventListener('input', checkReady);
+
+    function checkReady() {
+      processBtn.disabled = !(fileInput.files.length && nameInput.value.trim());
+    }
+
+    processBtn.addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      const file = fileInput.files[0];
+      if (!name || !file) return;
+
+      processBtn.disabled = true;
+      processBtn.textContent = 'ĐANG XỬ LÝ...';
+
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('video', file);
+
+      try {
+        const res = await fetch('/process_reference', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        resultCard.hidden = false;
+        resultContent.innerHTML = `
+          <div class="result-success">
+            <p><strong>${data.name}</strong></p>
+            <p>Keyframes: ${data.keyframes} / Tổng frame: ${data.total_frames}</p>
+            <p>File: ${data.pkl_file}</p>
+          </div>
+        `;
+      } catch (err) {
+        resultCard.hidden = false;
+        resultContent.innerHTML = `<div class="result-error">Lỗi: ${err.message}</div>`;
+      }
+
+      processBtn.disabled = false;
+      processBtn.textContent = 'TRÍCH XUẤT KEYFRAMES & CHUẨN HÓA VECTOR';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workout - Cali AI Coach</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="workout-body">
+  <div class="workout-container">
+    <!-- Left: Camera -->
+    <div class="cam-panel">
+      <div class="cam-frame">
+        <img src="{{ url_for('video_feed') }}" id="cam-feed" alt="Camera">
+        <div class="cam-hud">
+          <div class="hud-score" id="hud-score">0</div>
+          <div class="hud-label">DIEM SO</div>
+        </div>
+        <div class="cam-reps">
+          <div class="hud-reps" id="hud-reps">0</div>
+          <div class="hud-label">LAN</div>
+        </div>
+      </div>
+      <!-- TTS feedback -->
+      <div class="tts-bar" id="tts-bar">Đang chờ...</div>
+    </div>
+
+    <!-- Right: Stats side -->
+    <div class="stats-panel">
+      <div class="stats-header">
+        <a href="/" class="back-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Thoát
+        </a>
+        <h2>Hít đất - Push-up</h2>
+      </div>
+
+      <div class="live-stats">
+        <div class="stat-item">
+          <span class="stat-num good" id="stat-score">0</span>
+          <span class="stat-label">Điểm</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-num" id="stat-reps">0</span>
+          <span class="stat-label">Reps</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-num" id="stat-cp">0/30</span>
+          <span class="stat-label">Checkpoint</span>
+        </div>
+      </div>
+
+      <div class="errors-box">
+        <h3>Lỗi form</h3>
+        <ul id="error-list">
+          <li class="no-error">Chưa có lỗi</li>
+        </ul>
+      </div>
+
+      <div class="feedback-box">
+        <h3>Phản hồi</h3>
+        <ul id="feedback-list">
+          <li class="no-error">Đang căn chỉnh...</li>
+        </ul>
+      </div>
+
+      <div class="status-bar">
+        <span id="status-text">CAN CHINH...</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='workout.js') }}"></script>
+</body>
+</html>

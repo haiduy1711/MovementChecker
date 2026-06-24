@@ -1,4 +1,4 @@
-import sys, os, cv2, numpy as np, json, time, uuid
+import sys, os, cv2, numpy as np, json, time, uuid, pickle
 from pathlib import Path
 from flask import Flask, render_template, request, redirect, url_for, Response, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from web.evaluator import evaluate_video, normalize_pose, cos_sim, detect_errors, check_push_up_alignment, calc_score, draw_h36m_skeleton, draw_error_overlay, BONE_DEFS, BONE_NAMES_LIST, H36M_SKELETON
 from core.mediapipe_to_h36m import mediapipe_to_h36m
+from core.keyframes import extract_key_frames
 
 app = Flask(__name__)
 BASE = Path(__file__).parent
@@ -14,16 +15,20 @@ UPLOAD = BASE / 'uploads'
 RESULTS = BASE / 'results'
 MODEL_PATH = str(DATA / 'pose_landmarker_full.task')
 CHECKPOINTS_PATH = str(DATA / 'calib_checkpoints.npz')
+EXERCISES_PKL = BASE / 'exercises'
 
-UPLOAD.mkdir(exist_ok=True); RESULTS.mkdir(exist_ok=True)
+UPLOAD.mkdir(exist_ok=True); RESULTS.mkdir(exist_ok=True); EXERCISES_PKL.mkdir(exist_ok=True)
 
-# Load checkpoints once
+# Load default checkpoints
 d = np.load(CHECKPOINTS_PATH)
 norm_cp = d['norm_checkpoints']
 
+# Global camera status for /api/status polling
+cam_status = {'score': 0, 'reps': 0, 'cp': 0, 'total_cp': 30, 'status': 'WAITING', 'errors': [], 'feedbacks': []}
+
 
 def gen_camera_feed():
-    """MJPEG stream: webcam → MediaPipe → annotated frames."""
+    global cam_status
     import mediapipe as mp
     from mediapipe.tasks import python as mp_tasks
     from mediapipe.tasks.python import vision as mp_vision
@@ -44,13 +49,13 @@ def gen_camera_feed():
     w, h = 640, 480
     flip = True
 
-    window = []; raw_window = []; cur_cp = -1; total_reps = 0; initialized = False; aligned_frames = 0; f_idx = 0
+    window = []; raw_window = []; cur_cp = -1; total_reps = 0
+    initialized = False; aligned_frames = 0; f_idx = 0
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-
         if flip:
             frame = cv2.flip(frame, 1)
 
@@ -121,6 +126,14 @@ def gen_camera_feed():
             naw = sum(1 for f in fb if f['severity'] == 'warning')
             score = calc_score(len(err_indices), nae, naw)
 
+        # Update global status
+        cam_status.update({
+            'score': score, 'reps': total_reps, 'cp': max(0, cur_cp),
+            'total_cp': len(norm_cp), 'status': status_text,
+            'errors': [BONE_NAMES_LIST[i] for i in err_indices],
+            'feedbacks': [f['message'] for f in fb],
+        })
+
         bw, bx = 160, (w - 160) // 2
         cv2.rectangle(frame, (bx, 5), (bx + bw, 22), (40, 40, 40), -1)
         fill = max(0, min(bw, int(bw * score / 100)))
@@ -154,9 +167,19 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/camera')
-def camera():
-    return render_template('camera.html')
+@app.route('/workout')
+def workout():
+    return render_template('workout.html')
+
+
+@app.route('/admin')
+def admin():
+    return render_template('admin.html')
+
+
+@app.route('/api/status')
+def api_status():
+    return jsonify(cam_status)
 
 
 @app.route('/video_feed')
@@ -172,27 +195,106 @@ def upload():
     file = request.files['video']
     if not file.filename:
         return 'No file', 400
-
     ext = os.path.splitext(file.filename)[1] or '.mp4'
     uid = uuid.uuid4().hex[:12]
-    in_name = uid + ext
-    out_name = uid + '_result.mp4'
-    in_path = str(UPLOAD / in_name)
-    out_path = str(RESULTS / out_name)
-
+    in_path = str(UPLOAD / f'{uid}{ext}')
+    out_path = str(RESULTS / f'{uid}_result.mp4')
     file.save(in_path)
-
     try:
         result = evaluate_video(in_path, out_path, norm_cp, MODEL_PATH)
-        result['video'] = out_name
+        result['video'] = f'{uid}_result.mp4'
         result['id'] = uid
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
-        if os.path.exists(in_path):
-            os.remove(in_path)
-
+        if os.path.exists(in_path): os.remove(in_path)
     return render_template('result.html', **result)
+
+
+@app.route('/process_reference', methods=['POST'])
+def process_reference():
+    """Admin: upload video → MediaPipe → H36M → K-Means → .pkl"""
+    name = request.form.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'Missing exercise name'}), 400
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file'}), 400
+    file = request.files['video']
+    if not file.filename:
+        return jsonify({'error': 'No file'}), 400
+
+    ext = os.path.splitext(file.filename)[1] or '.mp4'
+    uid = uuid.uuid4().hex[:12]
+    video_path = str(UPLOAD / f'{uid}{ext}')
+    file.save(video_path)
+
+    try:
+        import mediapipe as mp
+        from mediapipe.tasks import python as mp_tasks
+        from mediapipe.tasks.python import vision as mp_vision
+
+        base = mp_tasks.BaseOptions(model_asset_path=MODEL_PATH)
+        opts = mp_vision.PoseLandmarkerOptions(
+            base_options=base, running_mode=mp_vision.RunningMode.VIDEO,
+            num_poses=1, min_pose_detection_confidence=0.5, min_tracking_confidence=0.5)
+        pose = mp_vision.PoseLandmarker.create_from_options(opts)
+
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        all_frames = []; f_idx = 0
+
+        print(f'Processing {total} frames for "{name}"...')
+        while True:
+            ret, frame = cap.read()
+            if not ret: break
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            result = pose.detect_for_video(img, int(f_idx * (1000 / fps)))
+            if result.pose_landmarks:
+                h36m = mediapipe_to_h36m(result.pose_landmarks[0], w, h)
+            else:
+                h36m = np.zeros((17, 3), np.float32)
+            all_frames.append(h36m)
+            f_idx += 1
+
+        cap.release(); pose.close()
+
+        std_arr = np.stack(all_frames)  # (N, 17, 3)
+        kf_idx = extract_key_frames(std_arr, n_clusters=30)
+        raw_cp = std_arr[kf_idx]  # (30, 17, 3)
+        norm_list = []
+        for kp in raw_cp:
+            n = normalize_pose(kp)[:, :2]
+            norm_list.append(n)
+        norm_cp_new = np.stack(norm_list)  # (30, 17, 2)
+
+        safe_name = secure_filename(name) or f'exercise_{uid}'
+        pkl_path = str(EXERCISES_PKL / f'{safe_name}.pkl')
+        with open(pkl_path, 'wb') as f:
+            pickle.dump({
+                'name': name, 'uid': uid,
+                'raw_checkpoints': raw_cp,
+                'norm_checkpoints': norm_cp_new,
+                'kf_indices': kf_idx,
+                'source_video': video_path,
+                'total_frames': total,
+            }, f)
+
+        os.remove(video_path)
+        print(f'Saved {len(kf_idx)} keyframes to {pkl_path}')
+
+        return jsonify({
+            'success': True, 'name': name,
+            'keyframes': len(kf_idx), 'total_frames': total,
+            'pkl_file': f'{safe_name}.pkl',
+        })
+
+    except Exception as e:
+        if os.path.exists(video_path): os.remove(video_path)
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/results/<filename>')

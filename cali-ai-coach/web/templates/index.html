@@ -7,92 +7,146 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>Cali AI Coach</h1>
-      <p class="subtitle">Hệ thống đánh giá tư thế hít đất</p>
-    </header>
-
-    <div class="tabs">
-      <button class="tab active" data-tab="upload">Upload Video</button>
-      <button class="tab" data-tab="camera" onclick="location.href='/camera'">Camera</button>
-    </div>
-
-    <div id="upload" class="tab-content active">
-      <div class="card">
-        <h2>Đánh giá video</h2>
-        <p class="desc">Tải lên video ghi lại quá trình hít đất của bạn. Hệ thống sẽ phân tích tư thế và đưa ra điểm số cùng phản hồi lỗi.</p>
-
-        <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
-          <div class="dropzone" id="dropzone">
-            <div class="dz-content">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-              <p>Kéo thả video vào đây hoặc <span class="link">chọn file</span></p>
-              <p class="hint">Hỗ trợ: MP4, AVI, MOV</p>
-            </div>
-            <input type="file" name="video" id="file-input" accept="video/*" hidden>
-          </div>
-          <button type="submit" class="btn" id="submit-btn" disabled>Bắt đầu đánh giá</button>
-        </form>
-
-        <div id="loading" class="loading hidden">
-          <div class="spinner"></div>
-          <p>Đang xử lý video...</p>
-          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-        </div>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/>
+          <path d="M18 12H6v2a6 6 0 0 0 12 0v-2z"/>
+        </svg>
+        <span>Cali AI</span>
       </div>
-    </div>
+      <nav class="nav">
+        <a href="/" class="nav-item active">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Skills
+        </a>
+        <a href="/workout" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Workout
+        </a>
+        <a href="/admin" class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Coach
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <header class="topbar">
+        <div class="user-info">
+          <div class="avatar">U</div>
+          <div>
+            <div class="user-name">Người tập</div>
+            <div class="user-plan">Gói: Miễn phí</div>
+          </div>
+        </div>
+        <div class="search-box">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Tìm bài tập..." id="search-input">
+        </div>
+      </header>
+
+      <section class="skills-section">
+        <h2>Danh sách kỹ năng</h2>
+
+        <div class="skill-list" id="skill-list">
+          <!-- Push-up -->
+          <div class="skill-card free" data-exercise="hit dat">
+            <div class="skill-icon" style="background:#7b2ff7">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M18 12H6v2a6 6 0 0 0 12 0v-2z"/></svg>
+            </div>
+            <div class="skill-body">
+              <div class="skill-name">Hít đất - Push-up</div>
+              <div class="skill-tags"><span class="tag free-tag">Miễn phí</span></div>
+            </div>
+            <div class="skill-action">
+              <a href="/workout" class="btn-small">Tập ngay</a>
+            </div>
+          </div>
+
+          <!-- Squat -->
+          <div class="skill-card free" data-exercise="squat">
+            <div class="skill-icon" style="background:#00bcd4">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="5" r="3"/><path d="M12 22V8M5 12l2-3 5-1 5 1 2 3"/></svg>
+            </div>
+            <div class="skill-body">
+              <div class="skill-name">Squat</div>
+              <div class="skill-tags"><span class="tag free-tag">Miễn phí</span></div>
+            </div>
+            <div class="skill-action">
+              <a href="/workout" class="btn-small">Tập ngay</a>
+            </div>
+          </div>
+
+          <!-- Plank -->
+          <div class="skill-card free" data-exercise="plank">
+            <div class="skill-icon" style="background:#ff9800">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="2"/><line x1="15" y1="22" x2="15" y2="2"/></svg>
+            </div>
+            <div class="skill-body">
+              <div class="skill-name">Plank</div>
+              <div class="skill-tags"><span class="tag free-tag">Miễn phí</span></div>
+            </div>
+            <div class="skill-action">
+              <a href="/workout" class="btn-small">Tập ngay</a>
+            </div>
+          </div>
+
+          <!-- Handstand -->
+          <div class="skill-card locked" data-exercise="tronh chuoi">
+            <div class="skill-icon" style="background:#555">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div class="skill-body">
+              <div class="skill-name">Handstand - Trồng chuối</div>
+              <div class="skill-tags"><span class="tag premium-tag">Premium</span></div>
+            </div>
+            <div class="skill-action">
+              <span class="locked-icon">🔒</span>
+            </div>
+          </div>
+
+          <!-- Muscle-up -->
+          <div class="skill-card locked" data-exercise="len xa">
+            <div class="skill-icon" style="background:#555">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 12h12v2a6 6 0 0 1-12 0v-2z"/><line x1="12" y1="22" x2="12" y2="16"/></svg>
+            </div>
+            <div class="skill-body">
+              <div class="skill-name">Muscle-up - Lên xà nâng cao</div>
+              <div class="skill-tags"><span class="tag premium-tag">Premium</span></div>
+            </div>
+            <div class="skill-action">
+              <span class="locked-icon">🔒</span>
+            </div>
+          </div>
+
+          <!-- Planche -->
+          <div class="skill-card locked" data-exercise="planche">
+            <div class="skill-icon" style="background:#555">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><circle cx="12" cy="5" r="3"/><path d="M5 20l5-8 2-2 2 2 5 8"/></svg>
+            </div>
+            <div class="skill-body">
+              <div class="skill-name">Planche</div>
+              <div class="skill-tags"><span class="tag premium-tag">Premium</span></div>
+            </div>
+            <div class="skill-action">
+              <span class="locked-icon">🔒</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 
   <script>
-    const dropzone = document.getElementById('dropzone');
-    const fileInput = document.getElementById('file-input');
-    const submitBtn = document.getElementById('submit-btn');
-    const form = document.getElementById('upload-form');
-    const loading = document.getElementById('loading');
-    const progressFill = document.getElementById('progress-fill');
-
-    dropzone.addEventListener('click', () => fileInput.click());
-    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
-    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
-    dropzone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropzone.classList.remove('drag-over');
-      if (e.dataTransfer.files.length) {
-        fileInput.files = e.dataTransfer.files;
-        onFileSelected();
-      }
-    });
-    fileInput.addEventListener('change', onFileSelected);
-
-    function onFileSelected() {
-      const file = fileInput.files[0];
-      if (file) {
-        document.querySelector('.dz-content p:first-of-type').textContent = file.name;
-        submitBtn.disabled = false;
-      }
-    }
-
-    form.addEventListener('submit', () => {
-      loading.classList.remove('hidden');
-      submitBtn.disabled = true;
-      // Fake progress
-      let p = 0;
-      const interval = setInterval(() => {
-        p = Math.min(90, p + Math.random() * 5);
-        progressFill.style.width = p + '%';
-      }, 500);
-      // Store interval to clear later
-      form.dataset.interval = interval;
-    });
-
-    // Fallback: clean up if navigating away
-    window.addEventListener('beforeunload', () => {
-      if (form.dataset.interval) clearInterval(form.dataset.interval);
+    document.getElementById('search-input').addEventListener('input', function() {
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('.skill-card').forEach(card => {
+        card.style.display = card.dataset.exercise.includes(q) ? '' : 'none';
+      });
     });
   </script>
 </body>

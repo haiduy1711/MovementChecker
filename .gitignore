@@ -2,6 +2,8 @@
 *.task
 *.mp4
 *.npz
+*.pkl
 __pycache__/
 web/uploads/
 web/results/
+web/exercises/
