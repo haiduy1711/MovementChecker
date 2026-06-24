@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kết quả - Cali AI Coach</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Cali AI Coach</h1>
+      <p class="subtitle">Kết quả đánh giá</p>
+    </header>
+
+    <div class="result-grid">
+      <div class="card result-video">
+        <h2>Video đã phân tích</h2>
+        <video controls width="100%">
+          <source src="{{ url_for('result_file', filename=video) }}" type="video/mp4">
+        </video>
+      </div>
+
+      <div class="card result-stats">
+        <h2>Thống kê</h2>
+        <div class="stat-row">
+          <span class="stat-label">Điểm trung bình</span>
+          <span class="stat-value score {{ 'good' if avg_score >= 80 else 'warn' if avg_score >= 50 else 'bad' }}">{{ avg_score }}/100</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Điểm cao nhất</span>
+          <span class="stat-value">{{ peak_score }}/100</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Số rep hoàn thành</span>
+          <span class="stat-value">{{ reps }}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Tổng số frame</span>
+          <span class="stat-value">{{ total_frames }}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Đánh giá</span>
+          <span class="stat-value">
+            {% if avg_score >= 80 %}
+              <span class="badge good">Tốt</span>
+            {% elif avg_score >= 50 %}
+              <span class="badge warn">Trung bình</span>
+            {% else %}
+              <span class="badge bad">Cần cải thiện</span>
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <a href="/" class="btn">Đánh giá video khác</a>
+      <a href="{{ url_for('result_file', filename=video) }}" class="btn btn-secondary" download>Tải video</a>
+    </div>
+  </div>
+</body>
+</html>

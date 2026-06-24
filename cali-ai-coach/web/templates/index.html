@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cali AI Coach</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Cali AI Coach</h1>
+      <p class="subtitle">Hệ thống đánh giá tư thế hít đất</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="upload">Upload Video</button>
+      <button class="tab" data-tab="camera" onclick="location.href='/camera'">Camera</button>
+    </div>
+
+    <div id="upload" class="tab-content active">
+      <div class="card">
+        <h2>Đánh giá video</h2>
+        <p class="desc">Tải lên video ghi lại quá trình hít đất của bạn. Hệ thống sẽ phân tích tư thế và đưa ra điểm số cùng phản hồi lỗi.</p>
+
+        <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+          <div class="dropzone" id="dropzone">
+            <div class="dz-content">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <p>Kéo thả video vào đây hoặc <span class="link">chọn file</span></p>
+              <p class="hint">Hỗ trợ: MP4, AVI, MOV</p>
+            </div>
+            <input type="file" name="video" id="file-input" accept="video/*" hidden>
+          </div>
+          <button type="submit" class="btn" id="submit-btn" disabled>Bắt đầu đánh giá</button>
+        </form>
+
+        <div id="loading" class="loading hidden">
+          <div class="spinner"></div>
+          <p>Đang xử lý video...</p>
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const form = document.getElementById('upload-form');
+    const loading = document.getElementById('loading');
+    const progressFill = document.getElementById('progress-fill');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        onFileSelected();
+      }
+    });
+    fileInput.addEventListener('change', onFileSelected);
+
+    function onFileSelected() {
+      const file = fileInput.files[0];
+      if (file) {
+        document.querySelector('.dz-content p:first-of-type').textContent = file.name;
+        submitBtn.disabled = false;
+      }
+    }
+
+    form.addEventListener('submit', () => {
+      loading.classList.remove('hidden');
+      submitBtn.disabled = true;
+      // Fake progress
+      let p = 0;
+      const interval = setInterval(() => {
+        p = Math.min(90, p + Math.random() * 5);
+        progressFill.style.width = p + '%';
+      }, 500);
+      // Store interval to clear later
+      form.dataset.interval = interval;
+    });
+
+    // Fallback: clean up if navigating away
+    window.addEventListener('beforeunload', () => {
+      if (form.dataset.interval) clearInterval(form.dataset.interval);
+    });
+  </script>
+</body>
+</html>

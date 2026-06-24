@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Camera - Cali AI Coach</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Cali AI Coach</h1>
+      <p class="subtitle">Đánh giá thời gian thực qua camera</p>
+    </header>
+
+    <div class="card">
+      <div class="camera-container">
+        <img src="{{ url_for('video_feed') }}" id="cam-feed" alt="Camera feed">
+      </div>
+      <div class="camera-controls">
+        <a href="/" class="btn btn-secondary">Quay lại</a>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .camera-container {
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+    .camera-container img {
+      display: block;
+      width: 100%;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .camera-controls {
+      margin-top: 16px;
+      text-align: center;
+    }
+  </style>
+</body>
+</html>

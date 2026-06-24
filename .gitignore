@@ -3,3 +3,5 @@
 *.mp4
 *.npz
 __pycache__/
+web/uploads/
+web/results/
