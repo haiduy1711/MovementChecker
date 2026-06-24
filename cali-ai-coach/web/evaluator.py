@@ -32,11 +32,13 @@ def cos_sim(a, b):
 
 
 def detect_errors(s, t):
-    e = {}
+    e = {}; worst = ('', 1.0)
     for p, c, n, th in BONE_DEFS:
         sv = s[c] - s[p]; mv = t[c] - t[p]
-        if cos_sim(sv, mv) < th: e[n] = True
-    return e
+        cs = cos_sim(sv, mv)
+        if cs < th: e[n] = True
+        if cs < worst[1]: worst = (n, cs)
+    return e, worst[0], worst[1]
 
 
 def check_push_up_alignment(norm_xy):
@@ -126,7 +128,11 @@ def draw_guide_skeleton(frame, norm_cp, h, w):
         y2 = int(cy + (norm_cp[c, 1] - my_n) * scale)
         name = bone_map.get((p, c))
         color = (0, 255, 255) if name else (200, 200, 200)
-        cv2.line(overlay, (x1, y1), (x2, y2), color, 2)
+        cv2.arrowedLine(overlay, (x1, y1), (x2, y2), color, 2, tipLength=0.12)
+    for j in range(17):
+        x = int(cx + (norm_cp[j, 0] - mx_n) * scale)
+        y = int(cy + (norm_cp[j, 1] - my_n) * scale)
+        cv2.circle(overlay, (x, y), 5, (0, 255, 255), -1)
     cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
 
@@ -186,7 +192,7 @@ def evaluate_video(input_path, output_path, norm_cp, model_path, progress_cb=Non
         if not initialized:
             best, be = 0, float('inf')
             for i, cp in enumerate(norm_cp):
-                errs = detect_errors(smoothed, cp)
+                errs, _, _ = detect_errors(smoothed, cp)
                 if len(errs) < be:
                     be, best = len(errs), i
             cur_cp = best
@@ -195,7 +201,7 @@ def evaluate_video(input_path, output_path, norm_cp, model_path, progress_cb=Non
             total_reps += 1
             cur_cp = 0
         else:
-            errs = detect_errors(smoothed, norm_cp[cur_cp])
+            errs, worst_name, worst_cs = detect_errors(smoothed, norm_cp[cur_cp])
             err_names_set = set(errs.keys())
             err_indices = {i for i, bd in enumerate(BONE_DEFS) if bd[2] in err_names_set}
             if len(errs) == 0:

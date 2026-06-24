@@ -2,8 +2,8 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ exercise }} - Cali AI Coach</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>{{ exercise }} - Fitness AI Coach</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="workout-body">
@@ -11,7 +11,9 @@
     <!-- Camera panel -->
     <div class="cam-panel">
       <div class="cam-frame">
-        <img src="{{ url_for('video_feed', exercise=exercise) }}" id="cam-feed" alt="Camera">
+        <img id="cam-feed" alt="Camera">
+        <video id="phone-cam" autoplay playsinline style="display:none"></video>
+        <canvas id="phone-canvas" style="display:none"></canvas>
         <div class="cam-hud">
           <div class="hud-score" id="hud-score">0</div>
           <div class="hud-label">DIEM SO</div>
@@ -76,6 +78,7 @@
       <div class="status-bar">
         <span id="status-text">CAN CHINH...</span>
       </div>
+      <div id="camera-debug" style="font-size:0.75rem;color:#666;margin-top:4px;padding:4px 8px;background:#1a1a2e;border-radius:6px;"></div>
     </div>
   </div>
 

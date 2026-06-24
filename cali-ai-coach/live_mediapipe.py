@@ -51,12 +51,16 @@ def cos_sim(a, b):
 
 def detect_errors(student_xy, target_xy):
     errs = {}
+    worst = ('', 1.0)
     for p, c, name, thresh in BONE_DEFS:
         sv = student_xy[c] - student_xy[p]
         mv = target_xy[c] - target_xy[p]
-        if cos_sim(sv, mv) < thresh:
+        cs = cos_sim(sv, mv)
+        if cs < thresh:
             errs[name] = True
-    return errs
+        if cs < worst[1]:
+            worst = (name, cs)
+    return errs, worst[0], worst[1]
 
 
 ALIGN_THRESH = 0.3
@@ -73,7 +77,7 @@ def align_ok(student, target):
         elif cos_sim(sv, mv) >= ALIGN_THRESH:
             ok += 1
         total += 1
-    return ok == total
+    return ok / total >= 0.8
 
 
 def check_push_up_alignment(norm_xy):
@@ -202,7 +206,7 @@ def draw_guide_skeleton(frame, norm_checkpoint, h, w):
         y2 = int(cy + (norm_checkpoint[c, 1] - my_n) * scale)
         name = bone_map.get((p, c))
         color = (0, 255, 255) if name else (200, 200, 200)
-        cv2.line(overlay, (x1, y1), (x2, y2), color, 2)
+        cv2.arrowedLine(overlay, (x1, y1), (x2, y2), color, 2, tipLength=0.12)
     for j in range(17):
         x = int(cx + (norm_checkpoint[j, 0] - mx_n) * scale)
         y = int(cy + (norm_checkpoint[j, 1] - my_n) * scale)
@@ -303,6 +307,7 @@ def main():
             window.pop(0)
         smoothed = norm if len(window) < 3 else np.mean(window, axis=0)
 
+        worst_name = ''; worst_cs = 1.0
         err_names_set = set()
         if h36m[:, 2].max() < 0.1:
             status_text = 'NO POSE'
@@ -312,11 +317,11 @@ def main():
             aligned = align_ok(smoothed, norm_checkpoints[0])
             if aligned:
                 aligned_frames += 1
-                if aligned_frames >= 5:
+                if aligned_frames >= 4:
                     # Guide biến mất, bắt đầu đánh giá
                     best, best_err = 0, float('inf')
                     for i, cp in enumerate(norm_checkpoints):
-                        e = detect_errors(smoothed, cp)
+                        e, _, _ = detect_errors(smoothed, cp)
                         if len(e) < best_err:
                             best_err, best = len(e), i
                     cur_cp = best
@@ -324,7 +329,7 @@ def main():
                     status_text = f'INIT CP {best}'
                     err_indices = set()
                 else:
-                    status_text = f'CAN CHINH... ({aligned_frames}/5)'
+                    status_text = f'CAN CHINH... ({aligned_frames}/4)'
                     err_indices = set()
                     draw_guide_skeleton(frame, norm_checkpoints[0], h, w)
             else:
@@ -338,7 +343,7 @@ def main():
             status_text = f'REP {total_reps}!'
             err_indices = set()
         else:
-            errs = detect_errors(smoothed, norm_checkpoints[cur_cp])
+            errs, worst_name, worst_cs = detect_errors(smoothed, norm_checkpoints[cur_cp])
             err_names_set = set(errs.keys())
             err_indices = {i for i, bd in enumerate(BONE_DEFS) if bd[2] in err_names_set}
             if len(errs) == 0:
@@ -367,9 +372,12 @@ def main():
         cv2.putText(frame, f'Score: {score}/100', (bar_x + 5, 17),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-        cv2.rectangle(frame, (0, 25), (w, 62), (0, 0, 0), -1)
+        cv2.rectangle(frame, (0, 25), (w, 80), (0, 0, 0), -1)
         cv2.putText(frame, f'Frame {f_idx} | {status_text} | CP {cur_cp}/{len(norm_checkpoints)} | Reps {total_reps}',
                     (10, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+        if worst_name:
+            cv2.putText(frame, f'Worst: {worst_name} ({worst_cs:.2f})', (10, 70),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1)
 
         draw_error_overlay(frame, err_indices, h, w)
 
@@ -380,9 +388,6 @@ def main():
                 fb_color = (0, 0, 255) if fb['severity'] == 'error' else (0, 255, 255)
                 cv2.putText(frame, fb['message'][:45], (10, fb_y + fi * 18),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, fb_color, 1)
-
-        if len(smoothed) > 0 and cur_cp >= 0 and cur_cp < len(norm_checkpoints):
-            draw_h36m_vector_panel(frame, smoothed, norm_checkpoints[cur_cp], err_names_set, h, w)
 
         cv2.imshow('Cali AI Coach - Live (MediaPipe)', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):

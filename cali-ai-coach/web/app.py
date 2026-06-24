@@ -1,5 +1,6 @@
 import sys, os, cv2, numpy as np, json, time, uuid, pickle
 from pathlib import Path
+from collections import deque
 from flask import Flask, render_template, request, redirect, url_for, Response, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
@@ -27,8 +28,27 @@ UPLOAD.mkdir(exist_ok=True); RESULTS.mkdir(exist_ok=True); EXERCISES_PKL_DIR.mkd
 d = np.load(CHECKPOINTS_PATH)
 DEFAULT_NORM_CP = d['norm_checkpoints']
 
-# Global camera status
+# Global camera status (polled by frontend HUD)
 cam_status = {'score': 0, 'reps': 0, 'cp': 0, 'total_cp': 30, 'status': 'WAITING', 'errors': [], 'feedbacks': []}
+
+# Shared evaluation state for phone camera (/process_frame)
+eval_state = {
+    'window': deque(maxlen=7),
+    'raw_window': deque(maxlen=7),
+    'cur_cp': -1, 'total_reps': 0,
+    'initialized': False, 'aligned_frames': 0, 'f_idx': 0, 'show_guide': True,
+}
+norm_cp_cache = {}
+
+# Global MediaPipe detector (shared across requests)
+_pose_detector = None
+
+
+def get_pose_detector():
+    global _pose_detector
+    if _pose_detector is None:
+        _pose_detector = make_pose_detector()
+    return _pose_detector
 
 
 def load_checkpoints(exercise):
@@ -68,153 +88,163 @@ def get_exercise_list():
     return exercises
 
 
-def gen_camera_feed(exercise='hit-dat'):
-    """MJPEG stream with exercise-specific checkpoints + guide skeleton."""
-    global cam_status
+def make_pose_detector():
     import mediapipe as mp
     from mediapipe.tasks import python as mp_tasks
     from mediapipe.tasks.python import vision as mp_vision
-
-    norm_cp = load_checkpoints(exercise)
-
     base = mp_tasks.BaseOptions(model_asset_path=MODEL_PATH)
     opts = mp_vision.PoseLandmarkerOptions(
         base_options=base, running_mode=mp_vision.RunningMode.VIDEO,
         num_poses=1, min_pose_detection_confidence=0.5, min_tracking_confidence=0.5)
-    pose = mp_vision.PoseLandmarker.create_from_options(opts)
+    return mp_vision.PoseLandmarker.create_from_options(opts)
+
+
+def process_pose_frame(frame, norm_cp, state, pose=None, w=640, h=480, flip=True):
+    """Run MediaPipe + evaluation on one frame, return annotated frame + state updates."""
+    import mediapipe as mp
+    if pose is None:
+        pose = get_pose_detector()
+
+    if flip:
+        frame = cv2.flip(frame, 1)
+
+    state['f_idx'] += 1
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    result = pose.detect_for_video(img, int(state['f_idx'] * 33.33))
+
+    if result.pose_landmarks:
+        h36m = mediapipe_to_h36m(result.pose_landmarks[0], w, h)
+    else:
+        h36m = np.zeros((17, 3), np.float32)
+
+    state['raw_window'].append(h36m.copy())
+    h36m_smooth = h36m if len(state['raw_window']) < 3 else np.mean(state['raw_window'], axis=0).astype(np.float32)
+
+    norm = normalize_pose(h36m_smooth)[:, :2]
+    state['window'].append(norm.copy())
+    smoothed = norm if len(state['window']) < 3 else np.mean(state['window'], axis=0)
+
+    worst_name = ''; worst_cs = 1.0
+    err_names_set = set()
+    status_text = ''
+
+    if not state['initialized']:
+        state['aligned_frames'] = 0
+        aligned = True
+        for p, c, n, th in BONE_DEFS:
+            sv = smoothed[c] - smoothed[p]
+            mv = norm_cp[0][c] - norm_cp[0][p]
+            if np.linalg.norm(sv) > 1e-4 and np.linalg.norm(mv) > 1e-4:
+                if cos_sim(sv, mv) < 0.3:
+                    aligned = False; break
+        if aligned:
+            state['aligned_frames'] += 1
+            if state['aligned_frames'] >= 4:
+                best, be = 0, float('inf')
+                for i, cp in enumerate(norm_cp):
+                    errs, _, _ = detect_errors(smoothed, cp)
+                    if len(errs) < be: be, best = len(errs), i
+                state['cur_cp'] = best
+                state['initialized'] = True
+                state['show_guide'] = False
+                status_text = f'INIT CP {best}'
+            else:
+                status_text = f'CAN CHINH... {state["aligned_frames"]}/4'
+        else:
+            state['aligned_frames'] = 0
+            status_text = 'CAN CHINH...'
+    elif state['cur_cp'] >= len(norm_cp):
+        state['total_reps'] += 1
+        state['cur_cp'] = 0
+        status_text = f'REP {state["total_reps"]}!'
+    else:
+        errs, worst_name, worst_cs = detect_errors(smoothed, norm_cp[state['cur_cp']])
+        err_names_set = set(errs.keys())
+        if len(errs) == 0:
+            state['cur_cp'] += 1
+            status_text = f'PASS CP {state["cur_cp"]}'
+        else:
+            status_text = f'WAIT CP {state["cur_cp"]} ({len(errs)} err)'
+
+    err_indices = {i for i, bd in enumerate(BONE_DEFS) if bd[2] in err_names_set}
+
+    if state['show_guide'] and not state['initialized']:
+        draw_guide_skeleton(frame, norm_cp[0], h, w)
+    if result.pose_landmarks:
+        draw_h36m_skeleton(frame, h36m_smooth, err_names_set, thickness=2)
+
+    score = 0; fb = []
+    if state['cur_cp'] >= 0 and state['cur_cp'] < len(norm_cp):
+        fb = check_push_up_alignment(smoothed)
+        nae = sum(1 for f in fb if f['severity'] == 'error')
+        naw = sum(1 for f in fb if f['severity'] == 'warning')
+        score = calc_score(len(err_indices), nae, naw)
+
+    cam_status.update({
+        'score': score, 'reps': state['total_reps'],
+        'cp': max(0, state['cur_cp']), 'total_cp': len(norm_cp),
+        'status': status_text,
+        'errors': [BONE_NAMES_LIST[i] for i in err_indices],
+        'feedbacks': [f['message'] for f in fb],
+    })
+
+    # Draw HUD
+    bw, bx = 160, (w - 160) // 2
+    cv2.rectangle(frame, (bx, 5), (bx + bw, 22), (40, 40, 40), -1)
+    fill = max(0, min(bw, int(bw * score / 100)))
+    sc = (0, 255, 0) if score >= 80 else (0, 255, 255) if score >= 50 else (0, 0, 255)
+    cv2.rectangle(frame, (bx, 5), (bx + fill, 22), sc, -1)
+    cv2.putText(frame, f'Score: {score}/100', (bx + 5, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+    if state['show_guide'] and not state['initialized']:
+        status_text = 'CAN CHINH...' if not status_text else status_text
+
+    cv2.putText(frame, status_text, (10, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
+    if worst_name:
+        cv2.putText(frame, f'Worst: {worst_name} ({worst_cs:.2f})', (10, 70),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1)
+    draw_error_overlay(frame, err_indices, h, w)
+
+    if fb:
+        fb_y = h - 20 - len(fb) * 18
+        cv2.rectangle(frame, (0, fb_y - 5), (360, h - 5), (0, 0, 0), -1)
+        for i, f in enumerate(fb):
+            fc = (0, 255, 255) if f['severity'] == 'warning' else (0, 0, 255)
+            cv2.putText(frame, f['message'], (10, fb_y + i * 18), cv2.FONT_HERSHEY_SIMPLEX, 0.4, fc, 1)
+
+    return frame
+
+
+def gen_camera_feed(exercise='hit-dat'):
+    global cam_status, eval_state
+    norm_cp = load_checkpoints(exercise)
+    pose = make_pose_detector()
 
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         yield b'--frame\r\nContent-Type: text/plain\r\n\r\nCamera not available\r\n'
         return
-
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     w, h = 640, 480
-    flip = True
 
-    window = []; raw_window = []; cur_cp = -1; total_reps = 0
-    initialized = False; aligned_frames = 0; f_idx = 0
-    show_guide = True
+    # Reset state
+    eval_state = {
+        'window': deque(maxlen=7), 'raw_window': deque(maxlen=7),
+        'cur_cp': -1, 'total_reps': 0, 'initialized': False,
+        'aligned_frames': 0, 'f_idx': 0, 'show_guide': True,
+    }
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-        if flip:
-            frame = cv2.flip(frame, 1)
-
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        result = pose.detect_for_video(img, int(f_idx * 33.33))
-
-        if result.pose_landmarks:
-            h36m = mediapipe_to_h36m(result.pose_landmarks[0], w, h)
-        else:
-            h36m = np.zeros((17, 3), np.float32)
-
-        raw_window.append(h36m.copy())
-        if len(raw_window) > 7: raw_window.pop(0)
-        h36m_smooth = h36m if len(raw_window) < 3 else np.mean(raw_window, axis=0).astype(np.float32)
-
-        norm = normalize_pose(h36m_smooth)[:, :2]
-        window.append(norm.copy())
-        if len(window) > 7: window.pop(0)
-        smoothed = norm if len(window) < 3 else np.mean(window, axis=0)
-
-        err_names_set = set()
-        status_text = ''
-
-        if not initialized:
-            aligned = True
-            for p, c, n, th in BONE_DEFS:
-                sv = smoothed[c] - smoothed[p]
-                mv = norm_cp[0][c] - norm_cp[0][p]
-                if np.linalg.norm(sv) > 1e-4 and np.linalg.norm(mv) > 1e-4:
-                    if cos_sim(sv, mv) < 0.3:
-                        aligned = False; break
-            if aligned:
-                aligned_frames += 1
-                if aligned_frames >= 5:
-                    best, be = 0, float('inf')
-                    for i, cp in enumerate(norm_cp):
-                        errs = detect_errors(smoothed, cp)
-                        if len(errs) < be: be, best = len(errs), i
-                    cur_cp = best
-                    initialized = True
-                    show_guide = False
-                    status_text = f'INIT CP {best}'
-                else:
-                    status_text = f'CAN CHINH... {aligned_frames}/5'
-            else:
-                aligned_frames = 0
-                status_text = 'CAN CHINH...'
-        elif cur_cp >= len(norm_cp):
-            total_reps += 1
-            cur_cp = 0
-            status_text = f'REP {total_reps}!'
-        else:
-            errs = detect_errors(smoothed, norm_cp[cur_cp])
-            err_names_set = set(errs.keys())
-            if len(errs) == 0:
-                cur_cp += 1
-                status_text = f'PASS CP {cur_cp}'
-            else:
-                status_text = f'WAIT CP {cur_cp} ({len(errs)} err)'
-
-        err_indices = {i for i, bd in enumerate(BONE_DEFS) if bd[2] in err_names_set}
-
-        # Draw guide skeleton
-        if show_guide and not initialized:
-            draw_guide_skeleton(frame, norm_cp[0], h, w)
-
-        # Draw student skeleton
-        if result.pose_landmarks:
-            draw_h36m_skeleton(frame, h36m_smooth, err_names_set, thickness=2)
-
-        score = 0; fb = []
-        if cur_cp >= 0 and cur_cp < len(norm_cp):
-            fb = check_push_up_alignment(smoothed)
-            nae = sum(1 for f in fb if f['severity'] == 'error')
-            naw = sum(1 for f in fb if f['severity'] == 'warning')
-            score = calc_score(len(err_indices), nae, naw)
-
-        cam_status.update({
-            'score': score, 'reps': total_reps, 'cp': max(0, cur_cp),
-            'total_cp': len(norm_cp), 'status': status_text,
-            'errors': [BONE_NAMES_LIST[i] for i in err_indices],
-            'feedbacks': [f['message'] for f in fb],
-        })
-
-        # HUD on frame
-        bw, bx = 160, (w - 160) // 2
-        cv2.rectangle(frame, (bx, 5), (bx + bw, 22), (40, 40, 40), -1)
-        fill = max(0, min(bw, int(bw * score / 100)))
-        sc = (0, 255, 0) if score >= 80 else (0, 255, 255) if score >= 50 else (0, 0, 255)
-        cv2.rectangle(frame, (bx, 5), (bx + fill, 22), sc, -1)
-        cv2.putText(frame, f'Score: {score}/100', (bx + 5, 17),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-
-        if show_guide and not initialized:
-            status_text = 'CAN CHINH...' if not status_text else status_text
-
-        cv2.putText(frame, status_text, (10, 48),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2)
-        draw_error_overlay(frame, err_indices, h, w)
-
-        if fb:
-            fb_y = h - 20 - len(fb) * 18
-            cv2.rectangle(frame, (0, fb_y - 5), (360, h - 5), (0, 0, 0), -1)
-            for i, f in enumerate(fb):
-                fc = (0, 255, 255) if f['severity'] == 'warning' else (0, 0, 255)
-                cv2.putText(frame, f['message'], (10, fb_y + i * 18),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, fc, 1)
-
-        ret, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        if not ret: continue
+        annotated = process_pose_frame(frame, norm_cp, eval_state, pose=pose, w=w, h=h, flip=True)
+        ret2, jpeg = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if not ret2: continue
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
-        f_idx += 1
 
     cap.release(); pose.close()
 
@@ -252,6 +282,32 @@ def video_feed():
     exercise = request.args.get('exercise', 'hit-dat')
     return Response(gen_camera_feed(exercise),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/process_frame', methods=['POST'])
+def process_frame():
+    global eval_state, norm_cp_cache
+    exercise = request.form.get('exercise', 'hit-dat')
+    if exercise not in norm_cp_cache:
+        norm_cp_cache[exercise] = load_checkpoints(exercise)
+    norm_cp = norm_cp_cache[exercise]
+
+    if 'frame' not in request.files:
+        return jsonify({'error': 'No frame'}), 400
+
+    file = request.files['frame']
+    nparr = np.frombuffer(file.read(), np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if frame is None:
+        return jsonify({'error': 'Bad image'}), 400
+
+    h, w = frame.shape[:2]
+    annotated = process_pose_frame(frame, norm_cp, eval_state, w=w, h=h, flip=False)
+    ret, jpeg = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    if not ret:
+        return jsonify({'error': 'Encode failed'}), 500
+
+    return Response(jpeg.tobytes(), mimetype='image/jpeg')
 
 
 @app.route('/upload', methods=['POST'])
@@ -356,4 +412,13 @@ def data_file(filename):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    import socket
+    hostname = socket.gethostname()
+    for ip in socket.gethostbyname_ex(hostname)[2]:
+        if ip.startswith('192.') or ip.startswith('10.') or ip.startswith('172.'):
+            print(f'  http://{ip}:5000')
+    print()
+    print('Neu bi chan camera (getUserMedia):')
+    print('  Chrome => chrome://flags/#unsafely-treat-insecure-origin-as-secure')
+    print('  Them http://<IP_May_Chu>:5000 vao danh sach, Relaunch')
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

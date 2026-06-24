@@ -61,7 +61,7 @@ def align_ok(student, target):
         elif cos_sim(sv, mv) >= ALIGN_THRESH:
             ok += 1
         total += 1
-    return ok == total
+    return ok / total >= 0.8
 
 
 def check_push_up_alignment(norm_xy):
