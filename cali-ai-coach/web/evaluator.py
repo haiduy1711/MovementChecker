@@ -100,6 +100,36 @@ def draw_error_overlay(frame, err_indices, h, w):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
 
 
+def draw_guide_skeleton(frame, norm_cp, h, w):
+    """Vẽ khung xương ảo mờ từ normalized checkpoint."""
+    if norm_cp is None:
+        return
+    pts = norm_cp[:, :2]
+    xs, ys = pts[:, 0], pts[:, 1]
+    x_min, x_max = xs.min(), xs.max()
+    y_min, y_max = ys.min(), ys.max()
+    cw_n, ch_n = x_max - x_min, y_max - y_min
+    if cw_n < 0.01 or ch_n < 0.01:
+        return
+    scale_h = (h * 0.55) / ch_n
+    scale_w = (w * 0.55) / cw_n
+    scale = min(scale_h, scale_w)
+    cx, cy = w // 2, h // 2
+    mx_n, my_n = (x_min + x_max) / 2, (y_min + y_max) / 2
+    overlay = frame.copy()
+    alpha = 0.35
+    bone_map = {(bd[0], bd[1]): bd[2] for bd in BONE_DEFS}
+    for (p, c) in H36M_SKELETON:
+        x1 = int(cx + (norm_cp[p, 0] - mx_n) * scale)
+        y1 = int(cy + (norm_cp[p, 1] - my_n) * scale)
+        x2 = int(cx + (norm_cp[c, 0] - mx_n) * scale)
+        y2 = int(cy + (norm_cp[c, 1] - my_n) * scale)
+        name = bone_map.get((p, c))
+        color = (0, 255, 255) if name else (200, 200, 200)
+        cv2.line(overlay, (x1, y1), (x2, y2), color, 2)
+    cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
+
+
 def evaluate_video(input_path, output_path, norm_cp, model_path, progress_cb=None):
     """Process video through MediaPipe, write annotated output, return summary."""
     import mediapipe as mp

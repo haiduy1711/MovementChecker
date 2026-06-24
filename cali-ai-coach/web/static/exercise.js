@@ -1,4 +1,4 @@
-// Workout page: poll /api/status + update HUD + TTS
+// Exercise page: poll /api/status + update HUD + TTS + reference switching
 (function() {
   const scoreEl = document.getElementById('hud-score');
   const repsEl = document.getElementById('hud-reps');
@@ -9,6 +9,8 @@
   const feedbackList = document.getElementById('feedback-list');
   const statusText = document.getElementById('status-text');
   const ttsBar = document.getElementById('tts-bar');
+  const camFeed = document.getElementById('cam-feed');
+  const refSelect = document.getElementById('ref-source');
 
   let lastTts = '';
   let ttsCooldown = 0;
@@ -23,34 +25,25 @@
   }
 
   function updateUI(data) {
-    // Score
     const score = data.score || 0;
     scoreEl.textContent = score;
     statScore.textContent = score;
     scoreEl.className = 'hud-score' + (score >= 80 ? ' good' : score >= 50 ? ' warn' : ' bad');
     statScore.className = 'stat-num' + (score >= 80 ? ' good' : score >= 50 ? ' warn' : ' bad');
 
-    // Reps
     repsEl.textContent = data.reps || 0;
     statReps.textContent = data.reps || 0;
-
-    // Checkpoint
     statCp.textContent = data.cp + '/' + data.total_cp;
-
-    // Status
     statusText.textContent = data.status || '...';
 
-    // Errors
     if (data.errors && data.errors.length) {
-      errorList.innerHTML = data.errors.map(e => '<li class="error-item">' + e + '</li>').join('');
+      errorList.innerHTML = data.errors.map(function(e) { return '<li class="error-item">' + e + '</li>'; }).join('');
     } else {
       errorList.innerHTML = '<li class="no-error">✓ Không có lỗi</li>';
     }
 
-    // Feedback
     if (data.feedbacks && data.feedbacks.length) {
-      feedbackList.innerHTML = data.feedbacks.map(f => '<li class="fb-item">' + f + '</li>').join('');
-      // TTS
+      feedbackList.innerHTML = data.feedbacks.map(function(f) { return '<li class="fb-item">' + f + '</li>'; }).join('');
       const latest = data.feedbacks[0];
       if (latest !== lastTts && Date.now() > ttsCooldown) {
         lastTts = latest;
@@ -59,35 +52,51 @@
         ttsBar.textContent = latest;
       }
     } else {
-      const msgs = {
+      var msgs = {
         'WAIT': 'Đang giữ checkpoint',
         'PASS': 'Chuẩn!',
         'REP': 'Hoàn thành!',
         'INIT': 'Bắt đầu',
-        'CAN CHINH': 'Hãy căn chỉnh sao cho khớp với khung xương ảo',
+        'CAN CHINH': 'Hãy căn chỉnh sao cho khớp với khung xương ảo màu vàng',
       };
-      const stat = (data.status || '');
-      let tip = 'Tốt!';
-      for (const [k, v] of Object.entries(msgs)) {
-        if (stat.includes(k)) { tip = v; break; }
+      var stat = (data.status || '');
+      var tip = 'Tốt!';
+      for (var k in msgs) {
+        if (stat.includes(k)) { tip = msgs[k]; break; }
       }
       feedbackList.innerHTML = '<li class="no-error">' + tip + '</li>';
-      if (stat.includes('PASS') || stat.includes('REP')) {
-        ttsBar.textContent = '✓ ' + tip;
-      } else {
-        ttsBar.textContent = tip;
-      }
+      ttsBar.textContent = (stat.includes('PASS') || stat.includes('REP')) ? '✓ ' + tip : tip;
     }
   }
 
-  // Poll every 400ms
-  setInterval(async () => {
+  // Poll
+  setInterval(async function() {
     try {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      updateUI(data);
-    } catch (e) {
-      // ignore
-    }
+      var r = await fetch('/api/status');
+      updateUI(await r.json());
+    } catch(e) {}
   }, 400);
+
+  // Reference selector: rebuild feed when changed
+  if (refSelect) {
+    // Load available exercises
+    fetch('/api/exercises').then(function(r) { return r.json(); }).then(function(list) {
+      list.forEach(function(ex) {
+        if (ex.checkpoints || ex.custom) {
+          var opt = document.createElement('option');
+          opt.value = ex.id;
+          opt.textContent = ex.name;
+          if (ex.id === EXERCISE) opt.selected = true;
+          refSelect.appendChild(opt);
+        }
+      });
+    });
+
+    refSelect.addEventListener('change', function() {
+      var val = refSelect.value;
+      camFeed.src = '/video_feed?exercise=' + encodeURIComponent(val);
+      ttsBar.textContent = 'Đã chuyển nguồn: ' + val;
+      document.getElementById('exercise-title').textContent = val;
+    });
+  }
 })();

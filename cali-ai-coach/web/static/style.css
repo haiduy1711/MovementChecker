@@ -151,6 +151,7 @@ body {
 
 .free-tag { background: rgba(0, 200, 83, 0.15); color: #4caf50; }
 .premium-tag { background: rgba(255, 215, 0, 0.15); color: #ffc107; }
+.cp-tag { background: rgba(0, 212, 255, 0.12); color: #00d4ff; }
 
 .skill-action {
   flex-shrink: 0;
@@ -171,6 +172,18 @@ body {
 .btn-small:hover { opacity: 0.85; }
 
 .locked-icon { font-size: 1.2rem; opacity: 0.5; }
+
+.no-cp { font-size: 0.75rem; color: #888; font-style: italic; }
+
+.warning-card {
+  background: rgba(255, 152, 0, 0.08);
+  border-color: rgba(255, 152, 0, 0.2);
+}
+.warning-card p { font-size: 0.85rem; color: #ff9800; line-height: 1.5; }
+.warning-card a { color: #00d4ff; }
+
+.ref-selector { margin-bottom: 8px; }
+.ref-selector label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
 
 /* ─── Form elements ─── */
 .form-group { margin-bottom: 18px; }

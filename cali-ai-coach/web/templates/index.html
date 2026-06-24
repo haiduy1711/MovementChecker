@@ -8,7 +8,6 @@
 </head>
 <body>
   <div class="app">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -22,10 +21,6 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           Skills
         </a>
-        <a href="/workout" class="nav-item">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-          Workout
-        </a>
         <a href="/admin" class="nav-item">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           Coach
@@ -33,7 +28,6 @@
       </nav>
     </aside>
 
-    <!-- Main -->
     <main class="main">
       <header class="topbar">
         <div class="user-info">
@@ -53,89 +47,45 @@
         <h2>Danh sách kỹ năng</h2>
 
         <div class="skill-list" id="skill-list">
-          <!-- Push-up -->
-          <div class="skill-card free" data-exercise="hit dat">
-            <div class="skill-icon" style="background:#7b2ff7">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M18 12H6v2a6 6 0 0 0 12 0v-2z"/></svg>
+          {% for ex in exercises %}
+          <div class="skill-card {{ 'free' if ex.free else 'locked' }}" data-exercise="{{ ex.name.lower() }}">
+            <div class="skill-icon" style="background:{{ '#7b2ff7' if ex.id == 'hit-dat' else '#00bcd4' if ex.id == 'squat' else '#ff9800' if ex.id == 'plank' else '#555' }}">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+                {% if ex.id == 'hit-dat' %}
+                <path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M18 12H6v2a6 6 0 0 0 12 0v-2z"/>
+                {% elif ex.id == 'squat' %}
+                <circle cx="12" cy="5" r="3"/><path d="M12 22V8M5 12l2-3 5-1 5 1 2 3"/>
+                {% elif ex.id == 'plank' %}
+                <rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="2"/><line x1="15" y1="22" x2="15" y2="2"/>
+                {% else %}
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                {% endif %}
+              </svg>
             </div>
             <div class="skill-body">
-              <div class="skill-name">Hít đất - Push-up</div>
-              <div class="skill-tags"><span class="tag free-tag">Miễn phí</span></div>
+              <div class="skill-name">{{ ex.name }}</div>
+              <div class="skill-tags">
+                {% if ex.free %}
+                  <span class="tag free-tag">Miễn phí</span>
+                  {% if ex.checkpoints %}<span class="tag cp-tag">Có video mẫu</span>{% endif %}
+                {% else %}
+                  <span class="tag premium-tag">Premium</span>
+                {% endif %}
+              </div>
             </div>
             <div class="skill-action">
-              <a href="/workout" class="btn-small">Tập ngay</a>
+              {% if ex.free %}
+                {% if ex.checkpoints %}
+                  <a href="/exercise/{{ ex.id }}" class="btn-small">Tập ngay</a>
+                {% else %}
+                  <span class="no-cp">Cần tạo mẫu</span>
+                {% endif %}
+              {% else %}
+                <span class="locked-icon">🔒</span>
+              {% endif %}
             </div>
           </div>
-
-          <!-- Squat -->
-          <div class="skill-card free" data-exercise="squat">
-            <div class="skill-icon" style="background:#00bcd4">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="5" r="3"/><path d="M12 22V8M5 12l2-3 5-1 5 1 2 3"/></svg>
-            </div>
-            <div class="skill-body">
-              <div class="skill-name">Squat</div>
-              <div class="skill-tags"><span class="tag free-tag">Miễn phí</span></div>
-            </div>
-            <div class="skill-action">
-              <a href="/workout" class="btn-small">Tập ngay</a>
-            </div>
-          </div>
-
-          <!-- Plank -->
-          <div class="skill-card free" data-exercise="plank">
-            <div class="skill-icon" style="background:#ff9800">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="2"/><line x1="15" y1="22" x2="15" y2="2"/></svg>
-            </div>
-            <div class="skill-body">
-              <div class="skill-name">Plank</div>
-              <div class="skill-tags"><span class="tag free-tag">Miễn phí</span></div>
-            </div>
-            <div class="skill-action">
-              <a href="/workout" class="btn-small">Tập ngay</a>
-            </div>
-          </div>
-
-          <!-- Handstand -->
-          <div class="skill-card locked" data-exercise="tronh chuoi">
-            <div class="skill-icon" style="background:#555">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </div>
-            <div class="skill-body">
-              <div class="skill-name">Handstand - Trồng chuối</div>
-              <div class="skill-tags"><span class="tag premium-tag">Premium</span></div>
-            </div>
-            <div class="skill-action">
-              <span class="locked-icon">🔒</span>
-            </div>
-          </div>
-
-          <!-- Muscle-up -->
-          <div class="skill-card locked" data-exercise="len xa">
-            <div class="skill-icon" style="background:#555">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M6 12h12v2a6 6 0 0 1-12 0v-2z"/><line x1="12" y1="22" x2="12" y2="16"/></svg>
-            </div>
-            <div class="skill-body">
-              <div class="skill-name">Muscle-up - Lên xà nâng cao</div>
-              <div class="skill-tags"><span class="tag premium-tag">Premium</span></div>
-            </div>
-            <div class="skill-action">
-              <span class="locked-icon">🔒</span>
-            </div>
-          </div>
-
-          <!-- Planche -->
-          <div class="skill-card locked" data-exercise="planche">
-            <div class="skill-icon" style="background:#555">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><circle cx="12" cy="5" r="3"/><path d="M5 20l5-8 2-2 2 2 5 8"/></svg>
-            </div>
-            <div class="skill-body">
-              <div class="skill-name">Planche</div>
-              <div class="skill-tags"><span class="tag premium-tag">Premium</span></div>
-            </div>
-            <div class="skill-action">
-              <span class="locked-icon">🔒</span>
-            </div>
-          </div>
+          {% endfor %}
         </div>
       </section>
     </main>
